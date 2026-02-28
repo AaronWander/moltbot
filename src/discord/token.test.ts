@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
-import { resolveDiscordToken } from "./token.js";
+import { resolveDiscordApplicationIdFromToken, resolveDiscordToken } from "./token.js";
 
 describe("resolveDiscordToken", () => {
   afterEach(() => {
@@ -42,5 +42,18 @@ describe("resolveDiscordToken", () => {
     const res = resolveDiscordToken(cfg, { accountId: "work" });
     expect(res.token).toBe("acct-token");
     expect(res.source).toBe("config");
+  });
+});
+
+describe("resolveDiscordApplicationIdFromToken", () => {
+  it("extracts 64-bit ids as strings without precision loss (#29608)", () => {
+    const token = "MTQ3NzE3OTYxMDMyMjk2NDU0MQ.GhIiP9.vU1xEpJ6NjFm-a7Ra_9pEZzdxQ7GQOLpiM0PzI";
+    expect(resolveDiscordApplicationIdFromToken(token)).toBe("1477179610322964541");
+  });
+
+  it("returns undefined when token is missing or malformed", () => {
+    expect(resolveDiscordApplicationIdFromToken("")).toBeUndefined();
+    expect(resolveDiscordApplicationIdFromToken("not-a-token")).toBeUndefined();
+    expect(resolveDiscordApplicationIdFromToken("....")).toBeUndefined();
   });
 });

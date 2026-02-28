@@ -1,7 +1,7 @@
 import type { BaseProbeResult } from "../channels/plugins/types.js";
 import { resolveFetch } from "../infra/fetch.js";
 import { fetchWithTimeout } from "../utils/fetch-timeout.js";
-import { normalizeDiscordToken } from "./token.js";
+import { normalizeDiscordToken, resolveDiscordApplicationIdFromToken } from "./token.js";
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 
@@ -171,5 +171,5 @@ export async function fetchDiscordApplicationId(
   fetcher: typeof fetch = fetch,
 ): Promise<string | undefined> {
   const json = await fetchDiscordApplicationMe(token, timeoutMs, fetcher);
-  return json?.id ?? undefined;
+  return json?.id ?? resolveDiscordApplicationIdFromToken(token);
 }

@@ -19,6 +19,45 @@ export function normalizeDiscordToken(raw?: string | null): string | undefined {
   return trimmed.replace(/^Bot\s+/i, "");
 }
 
+function decodeDiscordTokenIdPart(part: string): string | undefined {
+  const raw = part.trim();
+  if (!raw) {
+    return undefined;
+  }
+  const tryDecode = (encoding: "base64url" | "base64") => {
+    try {
+      const decoded = Buffer.from(raw, encoding).toString("utf8").trim();
+      return decoded ? decoded : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  return tryDecode("base64url") ?? tryDecode("base64");
+}
+
+/**
+ * Extract the Discord application/bot id from a bot token.
+ *
+ * Discord bot tokens are typically of the form "<base64(id)>.<...>.<...>".
+ * The decoded id can exceed Number.MAX_SAFE_INTEGER; keep it as a string.
+ */
+export function resolveDiscordApplicationIdFromToken(raw?: string | null): string | undefined {
+  const token = normalizeDiscordToken(raw);
+  if (!token) {
+    return undefined;
+  }
+  const idPart = token.split(".")[0]?.trim() ?? "";
+  if (!idPart) {
+    return undefined;
+  }
+  const decoded = decodeDiscordTokenIdPart(idPart);
+  if (!decoded) {
+    return undefined;
+  }
+  const normalized = decoded.trim();
+  return /^\d+$/.test(normalized) ? normalized : undefined;
+}
+
 export function resolveDiscordToken(
   cfg?: OpenClawConfig,
   opts: { accountId?: string | null; envToken?: string | null } = {},
