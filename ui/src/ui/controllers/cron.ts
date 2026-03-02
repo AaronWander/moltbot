@@ -571,6 +571,23 @@ export function buildCronPayload(form: CronFormState) {
   return payload;
 }
 
+function buildCronDelivery(form: CronFormState, opts: { includeNone: boolean }) {
+  const selectedDeliveryMode = form.deliveryMode;
+  if (!selectedDeliveryMode) {
+    return undefined;
+  }
+  if (selectedDeliveryMode === "none") {
+    return opts.includeNone ? { mode: "none" as const } : undefined;
+  }
+  return {
+    mode: selectedDeliveryMode,
+    channel:
+      selectedDeliveryMode === "announce" ? form.deliveryChannel.trim() || "last" : undefined,
+    to: form.deliveryTo.trim() || undefined,
+    bestEffort: form.deliveryBestEffort,
+  };
+}
+
 function buildFailureAlert(form: CronFormState) {
   if (form.failureAlertMode === "disabled") {
     return false as const;
@@ -612,19 +629,7 @@ export async function addCronJob(state: CronState) {
 
     const schedule = buildCronSchedule(form);
     const payload = buildCronPayload(form);
-    const selectedDeliveryMode = form.deliveryMode;
-    const delivery =
-      selectedDeliveryMode && selectedDeliveryMode !== "none"
-        ? {
-            mode: selectedDeliveryMode,
-            channel:
-              selectedDeliveryMode === "announce"
-                ? form.deliveryChannel.trim() || "last"
-                : undefined,
-            to: form.deliveryTo.trim() || undefined,
-            bestEffort: form.deliveryBestEffort,
-          }
-        : undefined;
+    const delivery = buildCronDelivery(form, { includeNone: Boolean(state.cronEditingJobId) });
     const failureAlert = buildFailureAlert(form);
     const agentId = form.clearAgent ? null : form.agentId.trim();
     const job = {

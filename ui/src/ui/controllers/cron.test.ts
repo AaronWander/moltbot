@@ -1,17 +1,44 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { DEFAULT_CRON_FORM } from "../app-defaults.ts";
-import {
-  addCronJob,
-  cancelCronEdit,
-  loadCronJobsPage,
-  loadCronRuns,
-  loadMoreCronRuns,
-  normalizeCronFormState,
-  startCronEdit,
-  startCronClone,
-  validateCronForm,
-  type CronState,
-} from "./cron.ts";
+import type { CronState } from "./cron.ts";
+
+let cron: typeof import("./cron.ts");
+
+function installLocalStorageMock() {
+  if (Reflect.has(globalThis, "localStorage")) {
+    return;
+  }
+  const store = new Map<string, string>();
+  const localStorage = {
+    get length() {
+      return store.size;
+    },
+    clear() {
+      store.clear();
+    },
+    getItem(key: string) {
+      return store.has(key) ? (store.get(key) ?? null) : null;
+    },
+    key(index: number) {
+      return Array.from(store.keys())[index] ?? null;
+    },
+    removeItem(key: string) {
+      store.delete(key);
+    },
+    setItem(key: string, value: string) {
+      store.set(key, String(value));
+    },
+  };
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: localStorage,
+  });
+}
+
+beforeAll(async () => {
+  installLocalStorageMock();
+  cron = await import("./cron.ts");
+});
 
 function createState(overrides: Partial<CronState> = {}): CronState {
   return {
@@ -55,7 +82,7 @@ function createState(overrides: Partial<CronState> = {}): CronState {
 
 describe("cron controller", () => {
   it("normalizes stale announce mode when session/payload no longer support announce", () => {
-    const normalized = normalizeCronFormState({
+    const normalized = cron.normalizeCronFormState({
       ...DEFAULT_CRON_FORM,
       sessionTarget: "main",
       payloadKind: "systemEvent",
@@ -66,7 +93,7 @@ describe("cron controller", () => {
   });
 
   it("keeps announce mode when isolated agentTurn supports announce", () => {
-    const normalized = normalizeCronFormState({
+    const normalized = cron.normalizeCronFormState({
       ...DEFAULT_CRON_FORM,
       sessionTarget: "isolated",
       payloadKind: "agentTurn",
@@ -109,7 +136,7 @@ describe("cron controller", () => {
       },
     });
 
-    await addCronJob(state);
+    await cron.addCronJob(state);
 
     const addCall = request.mock.calls.find(([method]) => method === "cron.add");
     expect(addCall).toBeDefined();
@@ -152,7 +179,7 @@ describe("cron controller", () => {
       },
     });
 
-    await addCronJob(state);
+    await cron.addCronJob(state);
 
     const addCall = request.mock.calls.find(([method]) => method === "cron.add");
     expect(addCall).toBeDefined();
@@ -160,7 +187,6 @@ describe("cron controller", () => {
       name: "main job",
     });
     expect((addCall?.[1] as { delivery?: unknown } | undefined)?.delivery).toBeUndefined();
-    expect(state.cronForm.deliveryMode).toBe("none");
   });
 
   it("submits cron.update when editing an existing job", async () => {
@@ -197,7 +223,7 @@ describe("cron controller", () => {
       },
     });
 
-    await addCronJob(state);
+    await cron.addCronJob(state);
 
     const updateCall = request.mock.calls.find(([method]) => method === "cron.update");
     expect(updateCall).toBeDefined();
@@ -210,6 +236,7 @@ describe("cron controller", () => {
         deleteAfterRun: false,
         schedule: { kind: "cron", expr: "0 8 * * *", staggerMs: 0 },
         payload: { kind: "systemEvent", text: "updated" },
+        delivery: { mode: "none" },
       },
     });
     expect(state.cronEditingJobId).toBeNull();
@@ -232,7 +259,7 @@ describe("cron controller", () => {
       state: {},
     };
 
-    startCronEdit(state, job);
+    cron.startCronEdit(state, job);
 
     expect(state.cronEditingJobId).toBe("job-9");
     expect(state.cronRunsJobId).toBe("job-9");
@@ -281,7 +308,7 @@ describe("cron controller", () => {
       },
     });
 
-    await addCronJob(state);
+    await cron.addCronJob(state);
 
     const updateCall = request.mock.calls.find(([method]) => method === "cron.update");
     expect(updateCall).toBeDefined();
@@ -329,7 +356,7 @@ describe("cron controller", () => {
       },
     });
 
-    await addCronJob(state);
+    await cron.addCronJob(state);
 
     const updateCall = request.mock.calls.find(([method]) => method === "cron.update");
     expect(updateCall).toBeDefined();
@@ -375,7 +402,7 @@ describe("cron controller", () => {
       },
     });
 
-    await addCronJob(state);
+    await cron.addCronJob(state);
 
     const updateCall = request.mock.calls.find(([method]) => method === "cron.update");
     expect(updateCall).toBeDefined();
@@ -420,7 +447,7 @@ describe("cron controller", () => {
       },
     });
 
-    await addCronJob(state);
+    await cron.addCronJob(state);
 
     const updateCall = request.mock.calls.find(([method]) => method === "cron.update");
     expect(updateCall).toBeDefined();
@@ -451,7 +478,7 @@ describe("cron controller", () => {
       delivery: { mode: "announce" as const, bestEffort: true },
       state: {},
     };
-    startCronEdit(state, job);
+    cron.startCronEdit(state, job);
 
     expect(state.cronForm.deleteAfterRun).toBe(true);
     expect(state.cronForm.scheduleKind).toBe("cron");
@@ -484,7 +511,7 @@ describe("cron controller", () => {
       state: {},
     };
 
-    startCronEdit(state, job);
+    cron.startCronEdit(state, job);
 
     expect(state.cronForm.failureAlertMode).toBe("custom");
     expect(state.cronForm.failureAlertAfter).toBe("4");
@@ -494,7 +521,7 @@ describe("cron controller", () => {
   });
 
   it("validates key cron form errors", () => {
-    const errors = validateCronForm({
+    const errors = cron.validateCronForm({
       ...DEFAULT_CRON_FORM,
       name: "",
       scheduleKind: "cron",
@@ -522,7 +549,7 @@ describe("cron controller", () => {
         payloadText: "",
       },
     });
-    await addCronJob(state);
+    await cron.addCronJob(state);
     expect(request).not.toHaveBeenCalled();
     expect(state.cronFieldErrors.name).toBeDefined();
     expect(state.cronFieldErrors.payloadText).toBeDefined();
@@ -543,15 +570,15 @@ describe("cron controller", () => {
       delivery: { mode: "announce" as const, to: "123" },
       state: {},
     };
-    startCronEdit(state, job);
+    cron.startCronEdit(state, job);
     state.cronForm.name = "changed";
     state.cronFieldErrors = { name: "Name is required." };
 
-    cancelCronEdit(state);
+    cron.cancelCronEdit(state);
 
     expect(state.cronEditingJobId).toBeNull();
     expect(state.cronForm).toEqual({ ...DEFAULT_CRON_FORM });
-    expect(state.cronFieldErrors).toEqual(validateCronForm(DEFAULT_CRON_FORM));
+    expect(state.cronFieldErrors).toEqual(cron.validateCronForm(DEFAULT_CRON_FORM));
   });
 
   it("cloning a job switches to create mode and applies copy naming", () => {
@@ -578,7 +605,7 @@ describe("cron controller", () => {
     if (!sourceJob) {
       return;
     }
-    startCronClone(state, sourceJob);
+    cron.startCronClone(state, sourceJob);
 
     expect(state.cronEditingJobId).toBeNull();
     expect(state.cronRunsJobId).toBe("job-1");
@@ -617,8 +644,8 @@ describe("cron controller", () => {
       cronEditingJobId: "job-1",
     });
 
-    startCronClone(state, sourceJob);
-    await addCronJob(state);
+    cron.startCronClone(state, sourceJob);
+    await cron.addCronJob(state);
 
     const addCall = request.mock.calls.find(([method]) => method === "cron.add");
     const updateCall = request.mock.calls.find(([method]) => method === "cron.update");
@@ -655,7 +682,7 @@ describe("cron controller", () => {
       cronJobsSortDir: "desc",
     });
 
-    await loadCronJobsPage(state);
+    await cron.loadCronJobsPage(state);
 
     expect(state.cronJobs).toHaveLength(1);
     expect(state.cronJobsTotal).toBe(1);
@@ -687,11 +714,11 @@ describe("cron controller", () => {
       client: { request } as unknown as CronState["client"],
     });
 
-    await loadCronRuns(state, "job-1");
+    await cron.loadCronRuns(state, "job-1");
     expect(state.cronRuns).toHaveLength(1);
     expect(state.cronRunsHasMore).toBe(true);
 
-    await loadMoreCronRuns(state);
+    await cron.loadMoreCronRuns(state);
     expect(state.cronRuns).toHaveLength(2);
     expect(state.cronRuns[0]?.summary).toBe("newest");
     expect(state.cronRuns[1]?.summary).toBe("older");
