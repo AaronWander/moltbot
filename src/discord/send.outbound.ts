@@ -20,6 +20,7 @@ import {
   buildDiscordSendError,
   buildDiscordTextChunks,
   createDiscordClient,
+  normalizeDiscordHardBreakNewlines,
   normalizeDiscordPollInput,
   normalizeStickerIds,
   parseAndResolveRecipient,
@@ -344,6 +345,7 @@ export async function sendWebhookMessageDiscord(
   const replyTo = typeof opts.replyTo === "string" ? opts.replyTo.trim() : "";
   const messageReference = replyTo ? { message_id: replyTo, fail_if_not_exists: false } : undefined;
 
+  const normalizedText = normalizeDiscordHardBreakNewlines(text);
   const response = await fetch(
     resolveWebhookExecutionUrl({
       webhookId,
@@ -357,7 +359,7 @@ export async function sendWebhookMessageDiscord(
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        content: text,
+        content: normalizedText,
         username: opts.username?.trim() || undefined,
         avatar_url: opts.avatarUrl?.trim() || undefined,
         ...(messageReference ? { message_reference: messageReference } : {}),

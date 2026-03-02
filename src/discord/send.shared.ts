@@ -257,6 +257,41 @@ export async function resolveDiscordChannelType(
 // Discord message flag for silent/suppress notifications
 export const SUPPRESS_NOTIFICATIONS_FLAG = 1 << 12;
 
+/**
+ * Discord currently treats single newlines inside paragraphs as "soft breaks" and can
+ * render them as spaces. Converting `\n` into Markdown hard breaks (`"  \n"`) restores
+ * the expected multi-line layout without changing paragraph breaks (`\n\n`).
+ *
+ * This only applies outside fenced code blocks to avoid altering code/content.
+ */
+export function normalizeDiscordHardBreakNewlines(text: string): string {
+  if (!text.includes("\n")) {
+    return text;
+  }
+  const lines = text.split("\n");
+  let inFence = false;
+  for (let i = 0; i < lines.length - 1; i++) {
+    const line = lines[i] ?? "";
+    const trimmedStart = line.trimStart();
+    if (trimmedStart.startsWith("```")) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) {
+      continue;
+    }
+    const next = lines[i + 1] ?? "";
+    if (line.trim().length === 0 || next.trim().length === 0) {
+      continue;
+    }
+    if (line.endsWith("  ")) {
+      continue;
+    }
+    lines[i] = `${line}  `;
+  }
+  return lines.join("\n");
+}
+
 export function buildDiscordTextChunks(
   text: string,
   opts: { maxLinesPerMessage?: number; chunkMode?: ChunkMode; maxChars?: number } = {},
@@ -264,7 +299,8 @@ export function buildDiscordTextChunks(
   if (!text) {
     return [];
   }
-  const chunks = chunkDiscordTextWithMode(text, {
+  const normalized = normalizeDiscordHardBreakNewlines(text);
+  const chunks = chunkDiscordTextWithMode(normalized, {
     maxChars: opts.maxChars ?? DISCORD_TEXT_LIMIT,
     maxLines: opts.maxLinesPerMessage,
     chunkMode: opts.chunkMode,
